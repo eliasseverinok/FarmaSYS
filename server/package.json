@@ -9,7 +9,6 @@
     "seed": "node seeders/seed.js"
   },
   "dependencies": {
-    "@lemonsqueezy/lemonsqueezy.js": "^4.0.0",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "crypto": "^1.0.1",

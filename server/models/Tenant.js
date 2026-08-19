@@ -32,10 +32,10 @@ const Tenant = sequelize.define('Tenant', {
       timezone: 'America/Guayaquil'
     }
   },
-  lemon_customer_id: {
+  payphone_transaction_id: {
     type: DataTypes.STRING
   },
-  lemon_subscription_id: {
+  payphone_client_id: {
     type: DataTypes.STRING
   }
 }, {
