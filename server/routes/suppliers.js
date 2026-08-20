@@ -7,7 +7,7 @@ const { Op } = require('sequelize');
 router.get('/', auth, async (req, res) => {
   try {
     const { search } = req.query;
-    const where = { active: true };
+    const where = { active: true, tenant_id: req.user.tenant_id };
     if (search) {
       where[Op.or] = [
         { name: { [Op.iLike]: `%${search}%` } },
@@ -23,7 +23,9 @@ router.get('/', auth, async (req, res) => {
 
 router.get('/:id', auth, async (req, res) => {
   try {
-    const supplier = await Supplier.findByPk(req.params.id);
+    const supplier = await Supplier.findOne({
+      where: { id: req.params.id, tenant_id: req.user.tenant_id }
+    });
     if (!supplier) return res.status(404).json({ message: 'Proveedor no encontrado.' });
     res.json(supplier);
   } catch (error) {
@@ -33,7 +35,10 @@ router.get('/:id', auth, async (req, res) => {
 
 router.post('/', auth, roleCheck('admin'), async (req, res) => {
   try {
-    const supplier = await Supplier.create(req.body);
+    const supplier = await Supplier.create({
+      ...req.body,
+      tenant_id: req.user.tenant_id
+    });
     res.status(201).json({ message: 'Proveedor creado.', supplier });
   } catch (error) {
     res.status(500).json({ message: 'Error al crear proveedor.' });
@@ -42,7 +47,9 @@ router.post('/', auth, roleCheck('admin'), async (req, res) => {
 
 router.put('/:id', auth, roleCheck('admin'), async (req, res) => {
   try {
-    const supplier = await Supplier.findByPk(req.params.id);
+    const supplier = await Supplier.findOne({
+      where: { id: req.params.id, tenant_id: req.user.tenant_id }
+    });
     if (!supplier) return res.status(404).json({ message: 'Proveedor no encontrado.' });
     await supplier.update(req.body);
     res.json({ message: 'Proveedor actualizado.', supplier });
@@ -53,7 +60,9 @@ router.put('/:id', auth, roleCheck('admin'), async (req, res) => {
 
 router.delete('/:id', auth, roleCheck('admin'), async (req, res) => {
   try {
-    const supplier = await Supplier.findByPk(req.params.id);
+    const supplier = await Supplier.findOne({
+      where: { id: req.params.id, tenant_id: req.user.tenant_id }
+    });
     if (!supplier) return res.status(404).json({ message: 'Proveedor no encontrado.' });
     await supplier.update({ active: false });
     res.json({ message: 'Proveedor eliminado.' });

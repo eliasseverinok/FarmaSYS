@@ -12,12 +12,14 @@ exports.create = async (req, res) => {
       return res.status(400).json({ message: 'Debe incluir al menos un producto.' });
     }
 
-    // Calculate totals and validate stock
     let subtotal = 0;
     const saleItems = [];
 
     for (const item of items) {
-      const product = await Product.findByPk(item.product_id, { transaction: t });
+      const product = await Product.findOne({
+        where: { id: item.product_id, tenant_id: req.user.tenant_id },
+        transaction: t
+      });
       if (!product) {
         await t.rollback();
         return res.status(400).json({ message: `Producto ID ${item.product_id} no encontrado.` });
@@ -44,7 +46,6 @@ exports.create = async (req, res) => {
     const tax = (subtotal - discount) * taxRate;
     const total = subtotal - discount + tax;
 
-    // Create sale
     const sale = await Sale.create({
       user_id: req.user.id,
       client_id: client_id || null,
@@ -52,10 +53,10 @@ exports.create = async (req, res) => {
       tax,
       discount,
       total,
-      status: 'completed'
+      status: 'completed',
+      tenant_id: req.user.tenant_id
     }, { transaction: t });
 
-    // Create sale details and update stock
     for (const item of saleItems) {
       await SaleDetail.create({
         sale_id: sale.id,
@@ -63,7 +64,8 @@ exports.create = async (req, res) => {
         quantity: item.quantity,
         unit_price: item.unit_price,
         discount: item.discount,
-        subtotal: item.subtotal
+        subtotal: item.subtotal,
+        tenant_id: req.user.tenant_id
       }, { transaction: t });
 
       await item.product.update(
@@ -72,19 +74,18 @@ exports.create = async (req, res) => {
       );
     }
 
-    // Create payment
     const changeAmount = payment_method === 'cash' ? Math.max(0, amount_paid - total) : 0;
     await Payment.create({
       sale_id: sale.id,
       method: payment_method,
       amount: amount_paid || total,
       change_amount: changeAmount,
-      reference: req.body.payment_reference || null
+      reference: req.body.payment_reference || null,
+      tenant_id: req.user.tenant_id
     }, { transaction: t });
 
-    // Generate receipt
     const lastReceipt = await Receipt.findOne({
-      where: { type: receipt_type },
+      where: { type: receipt_type, tenant_id: req.user.tenant_id },
       order: [['id', 'DESC']],
       transaction: t
     });
@@ -102,13 +103,14 @@ exports.create = async (req, res) => {
       type: receipt_type,
       subtotal,
       tax_amount: tax,
-      total
+      total,
+      tenant_id: req.user.tenant_id
     }, { transaction: t });
 
     await t.commit();
 
-    // Fetch complete sale
-    const completeSale = await Sale.findByPk(sale.id, {
+    const completeSale = await Sale.findOne({
+      where: { id: sale.id, tenant_id: req.user.tenant_id },
       include: [
         { model: SaleDetail, as: 'details', include: [{ model: Product, as: 'product' }] },
         { model: Client, as: 'client' },
@@ -134,7 +136,7 @@ exports.getAll = async (req, res) => {
   try {
     const { page = 1, limit = 20, start_date, end_date, status, user_id } = req.query;
     const offset = (page - 1) * limit;
-    const where = {};
+    const where = { tenant_id: req.user.tenant_id };
 
     if (start_date && end_date) {
       where.created_at = { [Op.between]: [new Date(start_date), new Date(end_date + 'T23:59:59')] };
@@ -169,7 +171,8 @@ exports.getAll = async (req, res) => {
 
 exports.getById = async (req, res) => {
   try {
-    const sale = await Sale.findByPk(req.params.id, {
+    const sale = await Sale.findOne({
+      where: { id: req.params.id, tenant_id: req.user.tenant_id },
       include: [
         { model: SaleDetail, as: 'details', include: [{ model: Product, as: 'product' }] },
         { model: Client, as: 'client' },
@@ -189,7 +192,7 @@ exports.getBySeller = async (req, res) => {
   try {
     const { id } = req.params;
     const { start_date, end_date } = req.query;
-    const where = { user_id: id };
+    const where = { user_id: id, tenant_id: req.user.tenant_id };
 
     if (start_date && end_date) {
       where.created_at = { [Op.between]: [new Date(start_date), new Date(end_date + 'T23:59:59')] };
@@ -216,7 +219,8 @@ exports.returnSale = async (req, res) => {
   let t;
   try {
     t = await sequelize.transaction();
-    const sale = await Sale.findByPk(req.params.id, {
+    const sale = await Sale.findOne({
+      where: { id: req.params.id, tenant_id: req.user.tenant_id },
       include: [{ model: SaleDetail, as: 'details', include: [{ model: Product, as: 'product' }] }],
       transaction: t
     });
@@ -231,7 +235,6 @@ exports.returnSale = async (req, res) => {
       return res.status(400).json({ message: 'La venta ya fue devuelta.' });
     }
 
-    // Restore stock
     for (const detail of sale.details) {
       await detail.product.update(
         { stock: detail.product.stock + detail.quantity },

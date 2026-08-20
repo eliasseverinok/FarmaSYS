@@ -6,7 +6,7 @@ exports.getAll = async (req, res) => {
     const { page = 1, limit = 20, search, category_id, low_stock, expiring } = req.query;
     const offset = (page - 1) * limit;
 
-    const where = { active: true };
+    const where = { active: true, tenant_id: req.user.tenant_id };
 
     if (search) {
       where[Op.or] = [
@@ -51,7 +51,8 @@ exports.getAll = async (req, res) => {
 
 exports.getById = async (req, res) => {
   try {
-    const product = await Product.findByPk(req.params.id, {
+    const product = await Product.findOne({
+      where: { id: req.params.id, tenant_id: req.user.tenant_id },
       include: [{ model: Category, as: 'category' }]
     });
     if (!product) return res.status(404).json({ message: 'Producto no encontrado.' });
@@ -69,7 +70,6 @@ exports.create = async (req, res) => {
       batch_number, presentation, laboratory
     } = req.body;
 
-    // Verificar registro sanitario
     let sanitary_verified = false;
     if (sanitary_registration && sanitary_registration.trim().length >= 5) {
       sanitary_verified = true;
@@ -78,10 +78,12 @@ exports.create = async (req, res) => {
     const product = await Product.create({
       name, generic_name, sanitary_registration, sanitary_verified,
       category_id, price, cost, stock, min_stock,
-      expiration_date, batch_number, presentation, laboratory
+      expiration_date, batch_number, presentation, laboratory,
+      tenant_id: req.user.tenant_id
     });
 
-    const created = await Product.findByPk(product.id, {
+    const created = await Product.findOne({
+      where: { id: product.id, tenant_id: req.user.tenant_id },
       include: [{ model: Category, as: 'category' }]
     });
 
@@ -94,7 +96,9 @@ exports.create = async (req, res) => {
 
 exports.update = async (req, res) => {
   try {
-    const product = await Product.findByPk(req.params.id);
+    const product = await Product.findOne({
+      where: { id: req.params.id, tenant_id: req.user.tenant_id }
+    });
     if (!product) return res.status(404).json({ message: 'Producto no encontrado.' });
 
     const updates = req.body;
@@ -104,7 +108,8 @@ exports.update = async (req, res) => {
 
     await product.update(updates);
 
-    const updated = await Product.findByPk(product.id, {
+    const updated = await Product.findOne({
+      where: { id: product.id, tenant_id: req.user.tenant_id },
       include: [{ model: Category, as: 'category' }]
     });
 
@@ -117,7 +122,9 @@ exports.update = async (req, res) => {
 
 exports.delete = async (req, res) => {
   try {
-    const product = await Product.findByPk(req.params.id);
+    const product = await Product.findOne({
+      where: { id: req.params.id, tenant_id: req.user.tenant_id }
+    });
     if (!product) return res.status(404).json({ message: 'Producto no encontrado.' });
 
     await product.update({ active: false });
@@ -132,9 +139,8 @@ exports.getLowStock = async (req, res) => {
     const products = await Product.findAll({
       where: {
         active: true,
-        [Op.and]: [
-          { stock: { [Op.gt]: 0 } }
-        ]
+        tenant_id: req.user.tenant_id,
+        stock: { [Op.gt]: 0 }
       },
       include: [{ model: Category, as: 'category' }],
       order: [['stock', 'ASC']]
@@ -156,6 +162,7 @@ exports.getExpiring = async (req, res) => {
     const products = await Product.findAll({
       where: {
         active: true,
+        tenant_id: req.user.tenant_id,
         expiration_date: {
           [Op.not]: null,
           [Op.lte]: futureDate
@@ -179,6 +186,7 @@ exports.search = async (req, res) => {
     const products = await Product.findAll({
       where: {
         active: true,
+        tenant_id: req.user.tenant_id,
         stock: { [Op.gt]: 0 },
         [Op.or]: [
           { name: { [Op.iLike]: `%${q}%` } },

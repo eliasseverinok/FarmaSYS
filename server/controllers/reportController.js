@@ -3,8 +3,9 @@ const { Sale, SaleDetail, Product, Category, Purchase, PurchaseDetail, Supplier,
 
 exports.salesReport = async (req, res) => {
   try {
+    const tenantId = req.user.tenant_id;
     const { start_date, end_date } = req.query;
-    const where = { status: 'completed' };
+    const where = { status: 'completed', tenant_id: tenantId };
 
     if (start_date && end_date) {
       where.created_at = { [Op.between]: [new Date(start_date), new Date(end_date + 'T23:59:59')] };
@@ -42,8 +43,9 @@ exports.salesReport = async (req, res) => {
 
 exports.inventoryReport = async (req, res) => {
   try {
+    const tenantId = req.user.tenant_id;
     const products = await Product.findAll({
-      where: { active: true },
+      where: { active: true, tenant_id: tenantId },
       include: [{ model: Category, as: 'category', attributes: ['name'] }],
       order: [['name', 'ASC']]
     });
@@ -72,6 +74,7 @@ exports.inventoryReport = async (req, res) => {
 
 exports.expiringReport = async (req, res) => {
   try {
+    const tenantId = req.user.tenant_id;
     const { days = 90 } = req.query;
     const futureDate = new Date();
     futureDate.setDate(futureDate.getDate() + parseInt(days));
@@ -79,6 +82,7 @@ exports.expiringReport = async (req, res) => {
     const products = await Product.findAll({
       where: {
         active: true,
+        tenant_id: tenantId,
         expiration_date: { [Op.not]: null, [Op.lte]: futureDate }
       },
       include: [{ model: Category, as: 'category', attributes: ['name'] }],
@@ -108,14 +112,16 @@ exports.expiringReport = async (req, res) => {
 
 exports.topProductsReport = async (req, res) => {
   try {
+    const tenantId = req.user.tenant_id;
     const { start_date, end_date, limit = 20 } = req.query;
-    const where = {};
+    const where = { tenant_id: tenantId };
 
     if (start_date && end_date) {
       where.created_at = { [Op.between]: [new Date(start_date), new Date(end_date + 'T23:59:59')] };
     }
 
     const topProducts = await SaleDetail.findAll({
+      where: { tenant_id: tenantId },
       attributes: [
         'product_id',
         [fn('SUM', col('quantity')), 'total_sold'],
@@ -145,8 +151,9 @@ exports.topProductsReport = async (req, res) => {
 
 exports.purchasesReport = async (req, res) => {
   try {
+    const tenantId = req.user.tenant_id;
     const { start_date, end_date } = req.query;
-    const where = {};
+    const where = { tenant_id: tenantId };
 
     if (start_date && end_date) {
       where.purchase_date = { [Op.between]: [start_date, end_date] };

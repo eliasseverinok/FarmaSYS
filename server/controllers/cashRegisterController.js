@@ -3,8 +3,9 @@ const { Op } = require('sequelize');
 
 exports.open = async (req, res) => {
   try {
+    const tenantId = req.user.tenant_id;
     const existing = await CashRegister.findOne({
-      where: { user_id: req.user.id, status: 'open' }
+      where: { user_id: req.user.id, status: 'open', tenant_id: tenantId }
     });
 
     if (existing) {
@@ -15,7 +16,8 @@ exports.open = async (req, res) => {
     const register = await CashRegister.create({
       user_id: req.user.id,
       opening_amount,
-      opened_at: new Date()
+      opened_at: new Date(),
+      tenant_id: tenantId
     });
 
     res.status(201).json({ message: 'Caja abierta exitosamente.', register });
@@ -27,20 +29,21 @@ exports.open = async (req, res) => {
 
 exports.close = async (req, res) => {
   try {
+    const tenantId = req.user.tenant_id;
     const register = await CashRegister.findOne({
-      where: { user_id: req.user.id, status: 'open' }
+      where: { user_id: req.user.id, status: 'open', tenant_id: tenantId }
     });
 
     if (!register) {
       return res.status(400).json({ message: 'No tiene una caja abierta.' });
     }
 
-    // Calculate totals from sales during this register's period
     const sales = await Sale.findAll({
       where: {
         user_id: req.user.id,
         status: 'completed',
-        created_at: { [Op.gte]: register.opened_at }
+        created_at: { [Op.gte]: register.opened_at },
+        tenant_id: tenantId
       },
       include: [{ model: Payment, as: 'payments' }]
     });
@@ -81,8 +84,9 @@ exports.close = async (req, res) => {
 
 exports.getCurrent = async (req, res) => {
   try {
+    const tenantId = req.user.tenant_id;
     const register = await CashRegister.findOne({
-      where: { user_id: req.user.id, status: 'open' },
+      where: { user_id: req.user.id, status: 'open', tenant_id: tenantId },
       include: [{ model: User, as: 'user', attributes: ['id', 'name'] }]
     });
 
@@ -94,7 +98,8 @@ exports.getCurrent = async (req, res) => {
 
 exports.getHistory = async (req, res) => {
   try {
-    const where = {};
+    const tenantId = req.user.tenant_id;
+    const where = { tenant_id: tenantId };
     if (req.user.role === 'cajero') {
       where.user_id = req.user.id;
     }

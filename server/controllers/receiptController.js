@@ -6,7 +6,7 @@ exports.getAll = async (req, res) => {
   try {
     const { page = 1, limit = 20, type, start_date, end_date, search } = req.query;
     const offset = (page - 1) * limit;
-    const where = {};
+    const where = { tenant_id: req.user.tenant_id };
 
     if (type) where.type = type;
     if (search) where.receipt_number = { [Op.iLike]: `%${search}%` };
@@ -37,7 +37,8 @@ exports.getAll = async (req, res) => {
 
 exports.getById = async (req, res) => {
   try {
-    const receipt = await Receipt.findByPk(req.params.id, {
+    const receipt = await Receipt.findOne({
+      where: { id: req.params.id, tenant_id: req.user.tenant_id },
       include: [{
         model: Sale, as: 'sale',
         include: [
@@ -58,7 +59,8 @@ exports.getById = async (req, res) => {
 exports.exportPDF = async (req, res) => {
   try {
     const [receipt, tenant] = await Promise.all([
-      Receipt.findByPk(req.params.id, {
+      Receipt.findOne({
+        where: { id: req.params.id, tenant_id: req.user.tenant_id },
         include: [{
           model: Sale, as: 'sale',
           include: [

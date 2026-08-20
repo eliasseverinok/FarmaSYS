@@ -5,6 +5,7 @@ exports.create = async (req, res) => {
   let t;
   try {
     t = await sequelize.transaction();
+    const tenantId = req.user.tenant_id;
     const { supplier_id, invoice_number, purchase_date, items } = req.body;
 
     if (!items || items.length === 0) {
@@ -15,7 +16,10 @@ exports.create = async (req, res) => {
     const purchaseItems = [];
 
     for (const item of items) {
-      const product = await Product.findByPk(item.product_id, { transaction: t });
+      const product = await Product.findOne({
+        where: { id: item.product_id, tenant_id: tenantId },
+        transaction: t
+      });
       if (!product) {
         await t.rollback();
         return res.status(400).json({ message: `Producto ID ${item.product_id} no encontrado.` });
@@ -31,7 +35,8 @@ exports.create = async (req, res) => {
       user_id: req.user.id,
       total,
       invoice_number,
-      purchase_date: purchase_date || new Date()
+      purchase_date: purchase_date || new Date(),
+      tenant_id: tenantId
     }, { transaction: t });
 
     for (const item of purchaseItems) {
@@ -40,10 +45,10 @@ exports.create = async (req, res) => {
         product_id: item.product_id,
         quantity: item.quantity,
         unit_cost: item.unit_cost,
-        subtotal: item.subtotal
+        subtotal: item.subtotal,
+        tenant_id: tenantId
       }, { transaction: t });
 
-      // Update stock and cost
       await item.product.update({
         stock: item.product.stock + item.quantity,
         cost: item.unit_cost
@@ -52,7 +57,8 @@ exports.create = async (req, res) => {
 
     await t.commit();
 
-    const completePurchase = await Purchase.findByPk(purchase.id, {
+    const completePurchase = await Purchase.findOne({
+      where: { id: purchase.id, tenant_id: tenantId },
       include: [
         { model: PurchaseDetail, as: 'details', include: [{ model: Product, as: 'product' }] },
         { model: Supplier, as: 'supplier' },
@@ -76,7 +82,7 @@ exports.getAll = async (req, res) => {
   try {
     const { page = 1, limit = 20, start_date, end_date, supplier_id } = req.query;
     const offset = (page - 1) * limit;
-    const where = {};
+    const where = { tenant_id: req.user.tenant_id };
 
     if (start_date && end_date) {
       where.purchase_date = { [Op.between]: [start_date, end_date] };
@@ -102,7 +108,8 @@ exports.getAll = async (req, res) => {
 
 exports.getById = async (req, res) => {
   try {
-    const purchase = await Purchase.findByPk(req.params.id, {
+    const purchase = await Purchase.findOne({
+      where: { id: req.params.id, tenant_id: req.user.tenant_id },
       include: [
         { model: PurchaseDetail, as: 'details', include: [{ model: Product, as: 'product' }] },
         { model: Supplier, as: 'supplier' },

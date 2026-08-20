@@ -4,7 +4,7 @@ const { Op } = require('sequelize');
 exports.getAll = async (req, res) => {
   try {
     const { search } = req.query;
-    const where = {};
+    const where = { tenant_id: req.user.tenant_id };
 
     if (search) {
       where[Op.or] = [
@@ -23,7 +23,9 @@ exports.getAll = async (req, res) => {
 
 exports.getById = async (req, res) => {
   try {
-    const client = await Client.findByPk(req.params.id);
+    const client = await Client.findOne({
+      where: { id: req.params.id, tenant_id: req.user.tenant_id }
+    });
     if (!client) return res.status(404).json({ message: 'Cliente no encontrado.' });
     res.json(client);
   } catch (error) {
@@ -35,11 +37,16 @@ exports.create = async (req, res) => {
   try {
     const { name, document_id, phone, email, address } = req.body;
     if (document_id) {
-      const existing = await Client.findOne({ where: { document_id } });
-      if (existing) return res.status(400).json({ message: 'Ya existe un cliente con ese documento.' });
+      const existing = await Client.findOne({
+        where: { document_id, tenant_id: req.user.tenant_id }
+      });
+      if (existing) return res.status(400).json({ message: 'Ya existe un cliente con ese documento en tu organización.' });
     }
 
-    const client = await Client.create({ name, document_id, phone, email, address });
+    const client = await Client.create({
+      name, document_id, phone, email, address,
+      tenant_id: req.user.tenant_id
+    });
     res.status(201).json({ message: 'Cliente creado.', client });
   } catch (error) {
     res.status(500).json({ message: 'Error al crear cliente.' });
@@ -48,7 +55,9 @@ exports.create = async (req, res) => {
 
 exports.update = async (req, res) => {
   try {
-    const client = await Client.findByPk(req.params.id);
+    const client = await Client.findOne({
+      where: { id: req.params.id, tenant_id: req.user.tenant_id }
+    });
     if (!client) return res.status(404).json({ message: 'Cliente no encontrado.' });
 
     await client.update(req.body);
@@ -60,7 +69,9 @@ exports.update = async (req, res) => {
 
 exports.delete = async (req, res) => {
   try {
-    const client = await Client.findByPk(req.params.id);
+    const client = await Client.findOne({
+      where: { id: req.params.id, tenant_id: req.user.tenant_id }
+    });
     if (!client) return res.status(404).json({ message: 'Cliente no encontrado.' });
 
     await client.destroy();
