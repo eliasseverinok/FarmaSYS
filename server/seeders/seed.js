@@ -1,5 +1,7 @@
 const path = require('path');
+try { require('dns').setServers(['8.8.8.8', '1.1.1.1']); } catch (e) {}
 require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
+require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 require('dotenv').config();
 const { sequelize, User, Category, Product, Client, Supplier } = require('../models');
 
